@@ -18,12 +18,12 @@ package tlb
 
 import chisel3._
 import chisel3.util._
-// import chisel3.util.experimental.BoringUtils
-// import bus.simplebus._
-// import bus.axi4._
-// import chisel3.experimental.IO
-// import utils._
-// import top.Settings
+import chisel3.util.experimental.BoringUtils
+import bus.simplebus._
+import bus.axi4._
+import chisel3.experimental.IO
+import utils._
+import top.Settings
 
 
 // trait HasTLBIO extends HasNutCoreParameter with HasTlbConst with HasCSRConst {
