@@ -431,7 +431,7 @@ class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule with HasT
   io.csrMMU.loadPF := false.B
   io.csrMMU.storePF := false.B
   io.csrMMU.addr := io.in.req.bits.addr
-  assert(io.csrMMU.loadPF)
+  assert(~io.csrMMU.loadPF)
   io.ipf := false.B
 }
 class EmbeddedTLB_test extends Module {

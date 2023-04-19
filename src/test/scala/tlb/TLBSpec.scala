@@ -14,6 +14,6 @@ class TLBSpec extends AnyFlatSpec with Formal with ChiselScalatestTester {
   it should "pass" in {
     // verify
     val dtlbconfig = TLBConfig(name = "dtlb", totalEntry = 64)
-    verify(new EmbeddedTLB_test(), Seq(BoundedCheck(10), BtormcEngineAnnotation))
+    verify(new EmbeddedTLB()(dtlbconfig), Seq(BoundedCheck(100), BtormcEngineAnnotation))
   }
 }
