@@ -6,7 +6,56 @@ import chisel3.util._
 // import rvspeccore.core.BaseCore
 // import rvspeccore.core.spec.instset.csr._
 import java.awt.print.Book
-
+class SV39PTE() extends Bundle {
+  val reserved = UInt(10.W)
+  val ppn      = UInt(44.W)
+  val rsw      = UInt(2.W)
+  val flag     = UInt(8.W)
+}
+class PTEFlag() extends Bundle {
+  val d = Bool()
+  val a = Bool()
+  val g = Bool()
+  val u = Bool()
+  val x = Bool()
+  val w = Bool()
+  val r = Bool()
+  val v = Bool()
+}
+class MstatusStruct(implicit XLEN: Int) extends Bundle {
+  // 记录Mstatus寄存器的状态 并使用Bundle按序构造寄存器
+  val sd   = Output(UInt(1.W))
+  val pad1 = if (XLEN == 64) Output(UInt(25.W)) else null
+  val mbe  = if (XLEN == 64) Output(UInt(1.W))  else null
+  val sbe  = if (XLEN == 64) Output(UInt(1.W))  else null
+  val sxl  = if (XLEN == 64) Output(UInt(2.W))  else null
+  val uxl  = if (XLEN == 64) Output(UInt(2.W))  else null
+  val pad0 = if (XLEN == 64) Output(UInt(9.W))  else Output(UInt(8.W))
+  val tsr  = Output(UInt(1.W)) // 22
+  val tw   = Output(UInt(1.W)) // 21
+  val tvm  = Output(UInt(1.W)) // 20
+  val mxr  = Output(UInt(1.W)) // 19
+  val sum  = Output(UInt(1.W)) // 18
+  val mprv = Output(UInt(1.W)) // 17
+  val xs   = Output(UInt(2.W)) // 16 ~ 15
+  val fs   = Output(UInt(2.W)) // 14 ~ 13
+  val mpp  = Output(UInt(2.W)) // 12 ~ 11
+  val vs   = Output(UInt(2.W)) // 10 ~ 9
+  val spp  = Output(UInt(1.W)) // 8
+  val mpie = Output(UInt(1.W)) // 7
+  val ube  = Output(UInt(1.W)) // 6
+  val spie = Output(UInt(1.W)) // 5
+  val pad2 = Output(UInt(1.W)) // 4
+  val mie  = Output(UInt(1.W)) // 3
+  val pad3 = Output(UInt(1.W)) // 2
+  val sie  = Output(UInt(1.W)) // 1
+  val pad4 = Output(UInt(1.W)) // 0
+}
+class SatpStruct(implicit XLEN: Int) extends Bundle {
+  val mode = if (XLEN == 32) UInt(1.W) else UInt(4.W)
+  val asid = if (XLEN == 32) UInt(9.W) else UInt(16.W)
+  val ppn  = if (XLEN == 32) UInt(22.W) else UInt(44.W)
+}
 class TLBSig()(implicit XLEN: Int) extends Bundle {
   val read  = new TLBMemInfo
   val write = new TLBMemInfo
@@ -26,7 +75,7 @@ class PTWLevel()(implicit XLEN: Int) extends Bundle {
   val pte      = UInt(XLEN.W) //FIXME: Just for SV39
 }
 
-trait LoadStore extends BaseCore with MMU{
+trait LoadStore extends MMU{
 //   def ModeU     = 0x0.U // 00 User/Application
 //   def ModeS     = 0x1.U // 01 Supervisor
 //   def ModeR     = 0x2.U // 10 Reserved
@@ -47,73 +96,61 @@ trait LoadStore extends BaseCore with MMU{
     )
   }
   def memRead(addr: UInt, memWidth: UInt): UInt = {
-    if(XLEN == 32){
-        val bytesWidth = log2Ceil(XLEN / 8)
-        val rOff  = addr(bytesWidth - 1, 0) << 3 // addr(byteWidth-1,0) * 8
-        val rMask = width2Mask(memWidth)
-        mem.read.valid    := true.B
-        mem.read.addr     := addr
-        mem.read.memWidth := memWidth
-        (mem.read.data >> rOff) & rMask
-    }else{
-        val bytesWidth = log2Ceil(XLEN / 8)
-        val rOff  = addr(bytesWidth - 1, 0) << 3 // addr(byteWidth-1,0) * 8
-        val rMask = width2Mask(memWidth)
-        val mstatusStruct = now.csr.mstatus.asTypeOf(new MstatusStruct)
-        val pv = Mux(mstatusStruct.mprv.asBool, mstatusStruct.mpp, priviledgeMode)
-        val vmEnable = now.csr.satp.asTypeOf(new SatpStruct).mode === 8.U && (pv < 0x3.U)
-        // printf("[Debug]Read addr:%x, priviledgeMode:%x %x %x %x vm:%x\n", addr, pv, mstatusStruct.mprv.asBool, mstatusStruct.mpp, priviledgeMode, vmEnable)
-        mem.read.valid    := true.B
-        when(vmEnable){
-            // mem.read.addr     := AddrTransRead(addr)
-            // FIXME: addr 的虚实地址均并非64位 需进一步加以限制
-            val (success, finaladdr) = PageTableWalk(addr, Load)
-            when(success){
-                mem.read.addr := finaladdr
-            }.otherwise{
-                raiseException(MExceptionCode.loadPageFault)
-            }
-        }.otherwise{
-            mem.read.addr     := addr
-        }
-        mem.read.memWidth := memWidth
-        (mem.read.data >> rOff) & rMask
-    }
+    // val bytesWidth = log2Ceil(XLEN / 8)
+    // val rOff  = addr(bytesWidth - 1, 0) << 3 // addr(byteWidth-1,0) * 8
+    // val rMask = width2Mask(memWidth)
+    // val mstatusStruct = now.csr.mstatus.asTypeOf(new MstatusStruct)
+    // val pv = Mux(mstatusStruct.mprv.asBool, mstatusStruct.mpp, priviledgeMode)
+    // val vmEnable = now.csr.satp.asTypeOf(new SatpStruct).mode === 8.U && (pv < 0x3.U)
+    // // printf("[Debug]Read addr:%x, priviledgeMode:%x %x %x %x vm:%x\n", addr, pv, mstatusStruct.mprv.asBool, mstatusStruct.mpp, priviledgeMode, vmEnable)
+    // mem.read.valid    := true.B
+    // when(vmEnable){
+    //     // mem.read.addr     := AddrTransRead(addr)
+    //     // FIXME: addr 的虚实地址均并非64位 需进一步加以限制
+    //     val (success, finaladdr) = PageTableWalk(addr, Load)
+    //     when(success){
+    //         mem.read.addr := finaladdr
+    //     }.otherwise{
+    //         raiseException(MExceptionCode.loadPageFault)
+    //     }
+    // }.otherwise{
+    //     mem.read.addr     := addr
+    // }
+    // mem.read.memWidth := memWidth
+    // (mem.read.data >> rOff) & rMask
+    1.U
   }
   def memWrite(addr: UInt, memWidth: UInt, data: UInt): Unit = {
-    if(XLEN == 32){
-        mem.write.valid    := true.B
-        mem.write.addr     := addr
-        mem.write.memWidth := memWidth
-        mem.write.data     := data
-    }else{
-        // val pv = Mux(now.csr.mstatus)
-        val mstatusStruct = now.csr.mstatus.asTypeOf(new MstatusStruct)
-        val pv = Mux(mstatusStruct.mprv.asBool, mstatusStruct.mpp, priviledgeMode)
-        val vmEnable = now.csr.satp.asTypeOf(new SatpStruct).mode === 8.U && (pv < 0x3.U)
-        // printf("[Debug]Write addr:%x, priviledgeMode:%x %x %x %x vm:%x\n", addr, pv, mstatusStruct.mprv.asBool, mstatusStruct.mpp, priviledgeMode, vmEnable)
-        mem.write.valid    := true.B
-        when(vmEnable){
-            // FIXME: addr 的虚实地址均并非64位 需进一步加以限制
-            val (success, finaladdr) = PageTableWalk(addr, Store)
-            when(success){
-                mem.write.addr := finaladdr
-            }.otherwise{
-                raiseException(MExceptionCode.storeOrAMOPageFault)
-            }
-        }.otherwise{
-            mem.write.addr := addr
-        }
-        mem.write.memWidth := memWidth
-        mem.write.data     := data
-    }
+    // // val pv = Mux(now.csr.mstatus)
+    // val mstatusStruct = now.csr.mstatus.asTypeOf(new MstatusStruct)
+    // val pv = Mux(mstatusStruct.mprv.asBool, mstatusStruct.mpp, priviledgeMode)
+    // val vmEnable = now.csr.satp.asTypeOf(new SatpStruct).mode === 8.U && (pv < 0x3.U)
+    // // printf("[Debug]Write addr:%x, priviledgeMode:%x %x %x %x vm:%x\n", addr, pv, mstatusStruct.mprv.asBool, mstatusStruct.mpp, priviledgeMode, vmEnable)
+    // mem.write.valid    := true.B
+    // when(vmEnable){
+    //     // FIXME: addr 的虚实地址均并非64位 需进一步加以限制
+    //     val (success, finaladdr) = PageTableWalk(addr, Store)
+    //     when(success){
+    //         mem.write.addr := finaladdr
+    //     }.otherwise{
+    //         raiseException(MExceptionCode.storeOrAMOPageFault)
+    //     }
+    // }.otherwise{
+    //     mem.write.addr := addr
+    // }
+    // mem.write.memWidth := memWidth
+    // mem.write.data     := data
+    1.U
   }
 
   def iFetchTrans(addr: UInt) : (Bool, UInt) = {
-    val vmEnable = now.csr.satp.asTypeOf(new SatpStruct).mode === 8.U && (priviledgeMode < 0x3.U)
+    val satp = WireInit("h8000000000080002".U(64.W))
+    val priviledgeMode = 1.U(64.W)
+    // TODO: think about priviledgeMode
+    val vmEnable = satp.asTypeOf(new SatpStruct()(64)).mode === 8.U && (priviledgeMode < 0x3.U)
     // printf("[Debug]iFetchTrans addr:%x, vm:%x \n", addr, vmEnable)
     val resultStatus = Wire(Bool())
-    val resultPC = Wire(UInt(XLEN.W))
+    val resultPC = Wire(UInt(64.W))
     when(vmEnable){
         val (success, finaladdr) = PageTableWalkIFetch(addr)
         when(success){
@@ -124,8 +161,8 @@ trait LoadStore extends BaseCore with MMU{
         }.otherwise{
             resultPC := 0.U
             resultStatus := false.B
-            // printf("[Debug]iFetchTrans3 Final Addr Trans Fault \n")
-            raiseException(MExceptionCode.instructionPageFault)
+            // FIXME: 修复异常报错接口的同步
+            // raiseException(MExceptionCode.instructionPageFault)
         }
     }.otherwise{
         resultPC := addr
@@ -135,42 +172,47 @@ trait LoadStore extends BaseCore with MMU{
   }
 }
 
-trait MMU extends BaseCore with ExceptionSupport{
+trait MMU {
     // 地址转换 先搞一个临时的
     // 0000_0000_8000_1000
     // "hff".U
     // "h8000_0000_0000_0000"
     def PARead(addr: UInt, memWidth: UInt): UInt = {
-        mem.read.valid    := true.B
-        mem.read.addr     := addr
-        mem.read.memWidth := memWidth
-        mem.read.data
+        // mem.read.valid    := true.B
+        // mem.read.addr     := addr
+        // mem.read.memWidth := memWidth
+        // mem.read.data
+        1.U
     }
 
     def PAReadMMU(addr: UInt, memWidth: UInt, no: Int): UInt = {
-        tlb.Anotherread(no).valid    := true.B
-        tlb.Anotherread(no).addr     := addr
-        tlb.Anotherread(no).memWidth := memWidth
-        tlb.Anotherread(no).data
+        // tlb.Anotherread(no).valid    := true.B
+        // tlb.Anotherread(no).addr     := addr
+        // tlb.Anotherread(no).memWidth := memWidth
+        // tlb.Anotherread(no).data
+        1.U
     }
     
     def PAWrite(addr: UInt, memWidth: UInt, data: UInt): Unit = {
-        mem.write.valid    := true.B
-        mem.write.addr     := addr    
-        mem.write.memWidth := memWidth
-        mem.write.data     := data
+        // mem.write.valid    := true.B
+        // mem.write.addr     := addr    
+        // mem.write.memWidth := memWidth
+        // mem.write.data     := data
+        1.U
     }
     def PAWriteMMU(addr: UInt, memWidth: UInt, data: UInt): Unit = {
         // 暂时先使用了一个端口 实际上 dirty操作的是最后找到的那个页 不像读页出现的问题
-        tlb.Anotherwrite(0).valid    := true.B
-        tlb.Anotherwrite(0).addr     := addr    
-        tlb.Anotherwrite(0).memWidth := memWidth
-        tlb.Anotherwrite(0).data     := data
+        // tlb.Anotherwrite(0).valid    := true.B
+        // tlb.Anotherwrite(0).addr     := addr    
+        // tlb.Anotherwrite(0).memWidth := memWidth
+        // tlb.Anotherwrite(0).data     := data
+        1.U
     }
 
     def LegalAddrStep5(isiFetch: Bool): Bool = {
         // FIXME: 需要进一步改这个函数 看手册哈
-        val sum = now.csr.mstatus.asTypeOf((new MstatusStruct)).sum
+        val mstatus = WireInit("h8000000000000000".U(64.W))
+        val sum = mstatus.asTypeOf((new MstatusStruct()(64))).sum
         sum.asBool || isiFetch
     }
 
@@ -253,12 +295,14 @@ trait MMU extends BaseCore with ExceptionSupport{
         // Vaddr 前保留位校验 Begin
         // 失败 则Go bad
         val finalSuccess = Wire(Bool())
-        val finaladdr = Wire(UInt(XLEN.W))
+        val finaladdr = Wire(UInt(64.W))
         when(AddrRSWLegal(addr)){
             printf("[Debug] Vaddr Legal\n")
             // 三级页表翻译 Begin
-            val LevelVec = Wire(Vec(3, new PTWLevel()))
-            val SatpNow = now.csr.satp.asTypeOf((new SatpStruct))
+            val LevelVec = Wire(Vec(3, new PTWLevel()(64)))
+            //FIXME: satp addSink
+            val satp = WireInit("h8000000000080002".U(64.W))
+            val SatpNow = satp.asTypeOf((new SatpStruct()(64)))
             LevelVec(2).valid := true.B     // 第一级肯定要打开
             LevelVec(2).addr  := Cat(Cat(0.U(8.W), Cat(SatpNow.ppn,addr(38,30))), 0.U(3.W))
             for(level <- 0 to 2){
@@ -371,12 +415,13 @@ trait MMU extends BaseCore with ExceptionSupport{
         // Vaddr 前保留位校验 Begin
         // 失败 则Go bad
         val finalSuccess = Wire(Bool())
-        val finaladdr = Wire(UInt(XLEN.W))
+        val finaladdr = Wire(UInt(64.W))
         when(AddrRSWLegal(addr)){
             printf("[Debug] Vaddr Legal\n")
             // 三级页表翻译 Begin
-            val LevelVec = Wire(Vec(3, new PTWLevel()))
-            val SatpNow = now.csr.satp.asTypeOf((new SatpStruct))
+            val LevelVec = Wire(Vec(3, new PTWLevel()(64)))
+            val satp = WireInit("h8000000000080002".U(64.W))
+            val SatpNow = satp.asTypeOf((new SatpStruct()(64)))
             LevelVec(2).valid := true.B     // 第一级肯定要打开
             LevelVec(2).addr  := Cat(Cat(0.U(8.W), Cat(SatpNow.ppn,addr(38,30))), 0.U(3.W))
             for(level <- 0 to 2){
