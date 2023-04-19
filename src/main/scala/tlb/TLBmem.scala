@@ -205,7 +205,19 @@ trait HasTlbConst extends Sv39Const{
 abstract class TlbBundle(implicit tlbConfig: TLBConfig) extends NutCoreBundle with HasNutCoreParameter with HasTlbConst with Sv39Const
 abstract class TlbModule(implicit tlbConfig: TLBConfig) extends NutCoreModule with HasNutCoreParameter with HasTlbConst with Sv39Const with HasCSRConst
 
-
+sealed class TLBMDWriteBundle (val IndexBits: Int, val Ways: Int, val tlbLen: Int) extends Bundle with HasNutCoreParameter with Sv39Const {
+  val wen = Output(Bool())
+  val windex = Output(UInt(IndexBits.W))
+  val waymask = Output(UInt(Ways.W))
+  val wdata = Output(UInt(tlbLen.W))
+  
+  def apply(wen: UInt, windex: UInt, waymask: UInt, vpn: UInt, asid: UInt, mask: UInt, flag: UInt, ppn: UInt, pteaddr: UInt) {
+    this.wen := wen
+    this.windex := windex
+    this.waymask := waymask
+    this.wdata := Cat(vpn, asid, mask, flag, ppn, pteaddr)
+  }
+}
 
 
 
