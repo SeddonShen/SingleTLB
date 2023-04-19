@@ -9,10 +9,10 @@ import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import chisel3.experimental.BundleLiterals._
 
-class NutCoreFormalSpec extends AnyFlatSpec with Formal with ChiselScalatestTester {
+class TLBSpec extends AnyFlatSpec with Formal with ChiselScalatestTester {
   behavior of "TLBFormal"
   it should "pass" in {
     // verify
-    verify(new TLB(), Seq(BoundedCheck(10), BtormcEngineAnnotation))
+    verify(new EmbeddedTLB_test(), Seq(BoundedCheck(10), BtormcEngineAnnotation))
   }
 }
