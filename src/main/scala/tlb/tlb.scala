@@ -77,15 +77,16 @@ class EmbeddedTLBMD(implicit val tlbConfig: TLBConfig) extends TlbModule {
 
 class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule with HasTLBIO {
 
-  val satp = WireInit(0.U(XLEN.W))
+  // val satp = WireInit(0.U(XLEN.W))
+  val satp = WireInit("h8000000000080002".U(XLEN.W))
   BoringUtils.addSink(satp, "CSRSATP")
-
+  // assert(satp =/= "h8000000000080002".U)
   // tlb exec
   val tlbExec = Module(new EmbeddedTLBExec)
   val tlbEmpty = Module(new EmbeddedTLBEmpty)
   val mdTLB = Module(new EmbeddedTLBMD)
   val mdUpdate = Wire(Bool())
-  
+  assume(io.flush === false.B)
   tlbExec.io.flush := io.flush
   tlbExec.io.satp := satp
   tlbExec.io.mem <> io.mem
@@ -94,14 +95,13 @@ class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule with HasT
   tlbExec.io.mdReady := mdTLB.io.ready
   mdTLB.io.rindex := getIndex(io.in.req.bits.addr)
   mdTLB.io.write <> tlbExec.io.mdWrite
-  
   io.ipf := false.B
   
   // meta reset
   val flushTLB = WireInit(false.B)
   BoringUtils.addSink(flushTLB, "MOUFlushTLB")
   mdTLB.reset := reset.asBool || flushTLB
-
+  
   // VM enable && io
   val vmEnable = satp.asTypeOf(satpBundle).mode === 8.U && (io.csrMMU.priviledgeMode < ModeM)
 
@@ -146,9 +146,9 @@ class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule with HasT
     val alreadyOutFinish = RegEnable(true.B, false.B, tlbExec.io.out.valid && !tlbExec.io.out.ready)
     when(alreadyOutFinish && tlbExec.io.out.fire) { alreadyOutFinish := false.B}
     val tlbFinish = (tlbExec.io.out.valid && !alreadyOutFinish) || tlbExec.io.pf.isPF()
-    BoringUtils.addSource(tlbFinish, "DTLBFINISH")
-    BoringUtils.addSource(io.csrMMU.isPF(), "DTLBPF")
-    BoringUtils.addSource(vmEnable, "DTLBENABLE")
+    // BoringUtils.addSource(tlbFinish, "DTLBFINISH")
+    // BoringUtils.addSource(io.csrMMU.isPF(), "DTLBPF")
+    // BoringUtils.addSource(vmEnable, "DTLBENABLE")
   }
 
   // instruction page fault
@@ -277,6 +277,7 @@ class EmbeddedTLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
         alreadyOutFire := false.B
       }.elsewhen (miss && !ioFlush) {
         state := s_memReadReq
+        printf("satp:%x\n", satp.asUInt)
         raddr := paddrApply(satp.ppn, vpn.vpn2) //
         level := Level.U
         needFlush := false.B
@@ -292,6 +293,7 @@ class EmbeddedTLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
     }
     is (s_memReadResp) { 
       val missflag = memRdata.flag.asTypeOf(flagBundle)
+      printf("memRdata:%x\n", memRdata.asUInt)
       when (io.mem.resp.fire) {
         when (isFlush) {
           state := s_idle
@@ -341,6 +343,8 @@ class EmbeddedTLBExec(implicit val tlbConfig: TLBConfig) extends TlbModule{
           missMask := Mux(level===3.U, 0.U(maskLen.W), Mux(level===2.U, "h3fe00".U(maskLen.W), "h3ffff".U(maskLen.W)))
           missMaskStore := missMask
         }
+        printf("level:%d\n", level)
+        assert(level =/= 1.U, "level should not be 0")
         level := level - 1.U
       }
     }
@@ -414,15 +418,6 @@ class EmbeddedTLB_fake(implicit val tlbConfig: TLBConfig) extends TlbModule with
   io.ipf := false.B
 }
 
-// class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule with HasTLBIO {
-//   io.mem <> DontCare
-//   io.out <> io.in
-//   io.csrMMU.loadPF := false.B
-//   io.csrMMU.storePF := false.B
-//   io.csrMMU.addr := io.in.req.bits.addr
-//   assert(~io.csrMMU.loadPF)
-//   io.ipf := false.B
-// }
 class EmbeddedTLB_test extends Module {
   val io = IO(new Bundle {
     val value1    = Input(UInt(16.W))
@@ -438,17 +433,17 @@ class EmbeddedTLB_test extends Module {
 
   io.output1 := x(0)
 }
-object EmbeddedTLB {
-  def apply(in: SimpleBusUC, mem: SimpleBusUC, flush: Bool, csrMMU: MMUIO, enable: Boolean = true)(implicit tlbConfig: TLBConfig) = {
-    val tlb = if (enable) {
-      Module(new EmbeddedTLB)
-    } else {
-      Module(new EmbeddedTLB_fake)
-    }
-    tlb.io.in <> in
-    tlb.io.mem <> mem
-    tlb.io.flush := flush
-    tlb.io.csrMMU <> csrMMU
-    tlb
-  }
-}
+// object EmbeddedTLB {
+//   def apply(in: SimpleBusUC, mem: SimpleBusUC, flush: Bool, csrMMU: MMUIO, enable: Boolean = true)(implicit tlbConfig: TLBConfig) = {
+//     val tlb = if (enable) {
+//       Module(new EmbeddedTLB)
+//     } else {
+//       Module(new EmbeddedTLB_fake)
+//     }
+//     tlb.io.in <> in
+//     tlb.io.mem <> mem
+//     tlb.io.flush := flush
+//     tlb.io.csrMMU <> csrMMU
+//     tlb
+//   }
+// }
