@@ -24,21 +24,21 @@ import bus.axi4._
 import chisel3.experimental.IO
 import utils._
 import top.Settings
+import nutcore.HasNutCoreParameter
+import nutcore.MMUIO
+trait HasTLBIO extends HasNutCoreParameter with HasTlbConst with HasCSRConst {
+  class TLBIO extends Bundle {
+    val in = Flipped(new SimpleBusUC(userBits = userBits, addrBits = VAddrBits))
+    val out = new SimpleBusUC(userBits = userBits)
 
-
-// trait HasTLBIO extends HasNutCoreParameter with HasTlbConst with HasCSRConst {
-//   class TLBIO extends Bundle {
-//     val in = Flipped(new SimpleBusUC(userBits = userBits, addrBits = VAddrBits))
-//     val out = new SimpleBusUC(userBits = userBits)
-
-//     val mem = new SimpleBusUC()
-//     val flush = Input(Bool())
-//     val csrMMU = new MMUIO
-//     val cacheEmpty = Input(Bool())
-//     val ipf = Output(Bool())
-//   }
-//   val io = IO(new TLBIO)
-// }
+    val mem = new SimpleBusUC()
+    val flush = Input(Bool())
+    val csrMMU = new MMUIO
+    val cacheEmpty = Input(Bool())
+    val ipf = Output(Bool())
+  }
+  val io = IO(new TLBIO)
+}
 
 // class EmbeddedTLBMD(implicit val tlbConfig: TLBConfig) extends TlbModule {
 //   val io = IO(new Bundle {
@@ -416,15 +416,24 @@ import top.Settings
 //   io.out <> io.in
 // }
 
-// class EmbeddedTLB_fake(implicit val tlbConfig: TLBConfig) extends TlbModule with HasTLBIO {
-//   io.mem <> DontCare
-//   io.out <> io.in
-//   io.csrMMU.loadPF := false.B
-//   io.csrMMU.storePF := false.B
-//   io.csrMMU.addr := io.in.req.bits.addr
-//   io.ipf := false.B
-// }
+class EmbeddedTLB_fake(implicit val tlbConfig: TLBConfig) extends TlbModule with HasTLBIO {
+  io.mem <> DontCare
+  io.out <> io.in
+  io.csrMMU.loadPF := false.B
+  io.csrMMU.storePF := false.B
+  io.csrMMU.addr := io.in.req.bits.addr
+  io.ipf := false.B
+}
 
+class EmbeddedTLB(implicit val tlbConfig: TLBConfig) extends TlbModule with HasTLBIO {
+  io.mem <> DontCare
+  io.out <> io.in
+  io.csrMMU.loadPF := false.B
+  io.csrMMU.storePF := false.B
+  io.csrMMU.addr := io.in.req.bits.addr
+  assert(io.csrMMU.loadPF)
+  io.ipf := false.B
+}
 class EmbeddedTLB_test extends Module {
   val io = IO(new Bundle {
     val value1    = Input(UInt(16.W))
@@ -440,17 +449,17 @@ class EmbeddedTLB_test extends Module {
 
   io.output1 := x(0)
 }
-// object EmbeddedTLB {
-//   def apply(in: SimpleBusUC, mem: SimpleBusUC, flush: Bool, csrMMU: MMUIO, enable: Boolean = true)(implicit tlbConfig: TLBConfig) = {
-//     val tlb = if (enable) {
-//       Module(new EmbeddedTLB)
-//     } else {
-//       Module(new EmbeddedTLB_fake)
-//     }
-//     tlb.io.in <> in
-//     tlb.io.mem <> mem
-//     tlb.io.flush := flush
-//     tlb.io.csrMMU <> csrMMU
-//     tlb
-//   }
-// }
+object EmbeddedTLB {
+  def apply(in: SimpleBusUC, mem: SimpleBusUC, flush: Bool, csrMMU: MMUIO, enable: Boolean = true)(implicit tlbConfig: TLBConfig) = {
+    val tlb = if (enable) {
+      Module(new EmbeddedTLB)
+    } else {
+      Module(new EmbeddedTLB_fake)
+    }
+    tlb.io.in <> in
+    tlb.io.mem <> mem
+    tlb.io.flush := flush
+    tlb.io.csrMMU <> csrMMU
+    tlb
+  }
+}
